@@ -1,0 +1,8 @@
+fastapi[standard]==0.110.3
+pydantic==2.7.1
+requests==2.31.0
+python-dotenv==1.0.1
+uvicorn==0.29.0
+pymongo
+passlib[bcrypt]
+python-jose
