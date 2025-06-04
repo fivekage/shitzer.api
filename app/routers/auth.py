@@ -12,7 +12,7 @@ def register(user: UserCreate):
     if users_collection.find_one({"email": user.email}):
         raise HTTPException(status_code=400, detail="Email déjà utilisé")
     hashed_pwd = hash_password(user.password)
-    user_dict = user.dict()
+    user_dict = user.model_dump()
     user_dict["hashed_password"] = hashed_pwd
     del user_dict["password"]
     result = users_collection.insert_one(user_dict)
@@ -24,4 +24,4 @@ def login(user: UserLogin):
     if not db_user or not verify_password(user.password, db_user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Identifiants invalides")
     access_token = create_access_token({"sub": str(db_user["_id"])})
-    return {"access_token": access_token, "token_type": "bearer"} 
+    return Token(access_token=str(access_token), token_type="bearer")
