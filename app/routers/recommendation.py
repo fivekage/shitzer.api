@@ -1,18 +1,75 @@
-from fastapi import APIRouter
-from ..schemas.interaction import RecommendationRequest
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from ..schemas.interaction import LikeRequest
 from ..db.mongo import interactions_collection
-from ..services.tmdb_client import build_prompt_from_liked_movies
+from ..services.tmdb_client import build_prompt_from_liked_movies, search_movie
 from ..services.openrouter_client import query_openrouter
+from ..services.auth import get_user_id_from_token
+import json
 
 router = APIRouter()
+security = HTTPBearer()
 
-@router.post("/recommendations")
-def recommend(data: RecommendationRequest):
-    record = interactions_collection.find_one({"user_id": data.user_id})
-    if not record:
-        return {"message": "Aucune interaction enregistrée"}
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    return get_user_id_from_token(token)
+
+@router.get("/recommendations")
+def recommend(user_id: str = Depends(get_current_user)):
+    record = interactions_collection.find_one({"user_id": user_id})
+    if not record or not record.get("liked_ids"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aucun film aimé trouvé pour cet utilisateur.")
 
     liked_ids = record.get("liked_ids", [])
     prompt = build_prompt_from_liked_movies(liked_ids)
-    response = query_openrouter(prompt)
-    return response
+    llm_response = query_openrouter(prompt)
+
+    try:
+        content_str = llm_response['choices'][0]['message']['content']
+        
+        # Nettoyer la réponse si elle est dans un bloc de code markdown
+        if content_str.strip().startswith("```json"):
+            content_str = content_str.strip()[7:-3].strip()
+        elif content_str.strip().startswith("`"):
+            content_str = content_str.strip().strip('`')
+
+        movie_titles = json.loads(content_str)
+        
+        if not isinstance(movie_titles, list):
+             raise ValueError("La réponse de l'IA n'est pas une liste.")
+
+        recommendations = []
+        for title in movie_titles:
+            movie_details = search_movie(title)
+            if movie_details:
+                recommendations.append({
+                    "title": movie_details.get("title"),
+                    "id": movie_details.get("id")
+                })
+        
+        return recommendations
+    except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
+        # Log l'erreur et la réponse brute pour le débogage
+        raw_content = llm_response.get('choices', [{}])[0].get('message', {}).get('content', 'Contenu non disponible')
+        print(f"Erreur de parsing de la réponse de l'IA: {e}")
+        print(f"Réponse brute: {raw_content}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Impossible de parser la recommandation de l'IA."
+        )
+
+@router.post("/like")
+def like_movie(data: LikeRequest, user_id: str = Depends(get_current_user)):
+    record = interactions_collection.find_one({"user_id": user_id})
+    if not record:
+        interactions_collection.insert_one({
+            "user_id": user_id,
+            "liked_ids": [data.movie_id]
+        })
+    else:
+        if data.movie_id not in record.get("liked_ids", []):
+            interactions_collection.update_one(
+                {"user_id": user_id},
+                {"$push": {"liked_ids": data.movie_id}}
+            )
+    return {"message": "Like enregistré"}

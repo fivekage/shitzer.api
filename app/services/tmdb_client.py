@@ -1,4 +1,5 @@
 import requests
+from typing import Optional
 from ..config import TMDB_API_KEY
 
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
@@ -15,6 +16,24 @@ def get_movie_info(tmdb_id: str) -> dict:
     response = requests.get(url, params=params)
     response.raise_for_status()
     return response.json()
+
+
+def search_movie(title: str) -> Optional[dict]:
+    """
+    Recherche un film par son titre et retourne le premier résultat.
+    """
+    url = f"{TMDB_BASE_URL}/search/movie"
+    params = {
+        "api_key": TMDB_API_KEY,
+        "query": title,
+        "language": "fr-FR"
+    }
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    results = response.json().get("results", [])
+    if results:
+        return results[0]
+    return None
 
 
 def build_prompt_from_liked_movies(tmdb_ids: list[str]) -> str:
@@ -37,8 +56,11 @@ def build_prompt_from_liked_movies(tmdb_ids: list[str]) -> str:
         return "Je n'ai pas de films à recommander pour le moment."
 
     prompt = (
-        "Voici les films que j'ai aimés :\n"
+        "Basé sur les films suivants que j'ai aimés :\n"
         + "\n".join(f"- {movie}" for movie in liked_movies)
-        + "\nPeux-tu me recommander d'autres films dans le même style ?"
+        + "\n\nRecommande-moi 10 films similaires. "
+        + "Ta réponse DOIT être uniquement un tableau JSON contenant les titres des films. "
+        + "Ne fournis aucune explication, introduction ou formatage. "
+        + "Exemple de réponse attendue : [\"Film A\", \"Film B\", \"Film C\"]"
     )
     return prompt
