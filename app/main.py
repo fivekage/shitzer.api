@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .routers import recommendation, auth
+from .routers import recommendation, auth, tmdb
 
 app = FastAPI()
 
@@ -10,6 +10,7 @@ async def root():
 
 app.include_router(recommendation.router, prefix="/api", tags=["recommendation"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(tmdb.router, prefix="/api/tmdb", tags=["tmdb"])
 
 
 if __name__ == "__main__":

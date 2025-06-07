@@ -4,6 +4,21 @@ from ..config import TMDB_API_KEY
 
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
+def get_top_movies(time_window: str = "day") -> list[dict]:
+    """
+    Récupère les films les plus populaires.
+    """
+    url = f"{TMDB_BASE_URL}/trending/movie/{time_window}"
+
+    params = {
+        "api_key": TMDB_API_KEY,
+        "language": "fr-FR",
+        "page": 1
+    }
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json().get("results", [])
+
 def get_movie_info(tmdb_id: str) -> dict:
     """
     Récupère les informations détaillées d'un film à partir de son ID TMDB.
@@ -62,5 +77,18 @@ def build_prompt_from_liked_movies(tmdb_ids: list[str]) -> str:
         + "Ta réponse DOIT être uniquement un tableau JSON contenant les titres des films. "
         + "Ne fournis aucune explication, introduction ou formatage. "
         + "Exemple de réponse attendue : [\"Film A\", \"Film B\", \"Film C\"]"
+    )
+    return prompt
+
+def build_prompt_from_mood(mood: str) -> str:
+    """
+    Construit un prompt pour le LLM basé sur une ambiance.
+    """
+    prompt = (
+        f"Je cherche des recommandations de films pour une ambiance '{mood}'. "
+        "Propose-moi une liste de 10 films qui correspondent à cette ambiance. "
+        "Ta réponse DOIT être uniquement un tableau JSON contenant les titres des films. "
+        "Ne fournis aucune explication, introduction ou formatage. "
+        "Exemple de réponse attendue : [\"Film A\", \"Film B\", \"Film C\"]"
     )
     return prompt
