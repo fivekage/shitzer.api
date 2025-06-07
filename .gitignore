@@ -1,1 +1,42 @@
 .venv
+
+# Byte-code / Fichiers compilés
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / Packaging
+build/
+dist/
+*.egg-info/
+*.egg
+/downloads/
+/site/
+/target/
+
+# Environnements virtuels
+.env
+env/
+venv/
+ENV/
+env.bak
+venv.bak
+
+# Fichiers d'IDE
+.idea/
+.vscode/
+
+# Bases de données
+*.sqlite3
+db.sqlite3
+
+# Fichiers de log
+*.log
+
+# Fichiers temporaires et de cache
+.pytest_cache/
+.coverage
+*.swp
+*.swo
+*.swn
