@@ -50,6 +50,18 @@ def search_movie(title: str) -> Optional[dict]:
         return results[0]
     return None
 
+def get_recommendations_from_movie(tmdb_id: str) -> list[dict]:
+    """
+    Récupère les recommandations d'un film à partir de son ID TMDB.
+    """
+    url = f"{TMDB_BASE_URL}/movie/{tmdb_id}/recommendations"
+    params = {
+        "api_key": TMDB_API_KEY,
+        "language": "fr-FR"
+    }
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json().get("results", [])
 
 def build_prompt_from_liked_movies(tmdb_ids: list[str]) -> str:
     """
