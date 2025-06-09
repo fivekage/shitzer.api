@@ -78,9 +78,13 @@ def recommend_by_mood(data: MoodRecommendationRequest, user_id: str = Depends(ge
         for title in movie_titles:
             movie_details = search_movie(title)
             if movie_details:
+                poster_path = movie_details.get("poster_path")
                 recommendations.append({
                     "title": movie_details.get("title"),
-                    "id": movie_details.get("id")
+                    "id": movie_details.get("id"),
+                    "overview": movie_details.get("overview"),
+                    "poster_path": poster_path,
+                    "release_date": movie_details.get("release_date")
                 })
         
         return recommendations
@@ -108,3 +112,41 @@ def like_movie(data: LikeRequest, user_id: str = Depends(get_current_user)):
                 {"$push": {"liked_ids": data.movie_id}}
             )
     return {"message": "Like enregistré"}
+
+
+@router.post("/dislike")
+def dislike_movie(data: LikeRequest, user_id: str = Depends(get_current_user)):
+    record = interactions_collection.find_one({"user_id": user_id})
+    if not record:
+        interactions_collection.insert_one({
+            "user_id": user_id,
+            "disliked_ids": [data.movie_id]
+        })
+    else:
+        interactions_collection.update_one(
+            {"user_id": user_id},
+            {"$push": {"disliked_ids": data.movie_id}}
+        )
+    return {"message": "Dislike enregistré"}
+
+@router.post("/unlike")
+def unlike_movie(data: LikeRequest, user_id: str = Depends(get_current_user)):
+    record = interactions_collection.find_one({"user_id": user_id})
+    if not record:
+        return {"message": "Aucun like trouvé pour cet utilisateur."}
+    interactions_collection.update_one(
+        {"user_id": user_id},
+        {"$pull": {"liked_ids": data.movie_id}}
+    )
+    return {"message": "Like supprimé"}
+
+@router.post("/undislike")
+def unlike_movie(data: LikeRequest, user_id: str = Depends(get_current_user)):
+    record = interactions_collection.find_one({"user_id": user_id})
+    if not record:
+        return {"message": "Aucun dislike trouvé pour cet utilisateur."}
+    interactions_collection.update_one(
+        {"user_id": user_id},
+        {"$pull": {"disliked_ids": data.movie_id}}
+    )
+    return {"message": "Dislike supprimé"}
