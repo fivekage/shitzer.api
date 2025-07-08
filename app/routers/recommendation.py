@@ -10,6 +10,7 @@ from ..services.auth import get_user_id_from_token
 from ..services.rawg_client import get_suggested_games
 from ..services.openlibrary_client import get_book_info, search_book
 import json
+from ..schemas.media import MediaRecommendation, MediaType
 
 router = APIRouter()
 security = HTTPBearer()
@@ -32,20 +33,13 @@ def recommend(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Aucun {media_type} aimé trouvé pour cet utilisateur.")
     # --- LOGIQUE SPECIALE POUR LES JEUX ---
     if media_type == "game":
-        # Suggestions natives RAWG
         suggestions = []
         seen_ids = set()
         for game_id in ids:
             try:
                 for game in get_suggested_games(game_id, page_size=10):
                     if game["id"] not in seen_ids:
-                        suggestions.append({
-                            "title": game.get("name"),
-                            "id": game.get("id"),
-                            "cover": game.get("background_image"),
-                            "release_date": game.get("released"),
-                            "platforms": [p["platform"]["name"] for p in game.get("platforms", [])]
-                        })
+                        suggestions.append(MediaRecommendation.from_game(game))
                         seen_ids.add(game["id"])
             except Exception as e:
                 print(f"[RAWG] Erreur suggestion pour {game_id}: {e}")
@@ -64,13 +58,7 @@ def recommend(
                     for title in media_titles:
                         game = search_media(media_type, title)
                         if game and game["id"] not in seen_ids:
-                            suggestions.append({
-                                "title": game.get("name"),
-                                "id": game.get("id"),
-                                "cover": game.get("background_image"),
-                                "release_date": game.get("released"),
-                                "platforms": [p["platform"]["name"] for p in game.get("platforms", [])]
-                            })
+                            suggestions.append(MediaRecommendation.from_game(game))
                             seen_ids.add(game["id"])
                         if len(suggestions) >= 10:
                             break
@@ -97,18 +85,13 @@ def recommend(
             except Exception as e:
                 print(f"[OpenLibrary] Erreur info livre {olid}: {e}")
         # Suggestions par auteur
-        for author in list(authors)[:2]:  # Limite pour éviter trop de requêtes
+        for author in list(authors)[:2]:
             try:
                 results = search_book(author)
                 for doc in results.get("docs", [])[:5]:
                     olid = doc.get("key", "").replace("/works/", "")
                     if olid and olid not in seen_olids:
-                        suggestions.append({
-                            "title": doc.get("title"),
-                            "id": olid,
-                            "cover": f"https://covers.openlibrary.org/b/id/{doc.get('cover_i')}-L.jpg" if doc.get('cover_i') else None,
-                            "author": doc.get("author_name", [None])[0]
-                        })
+                        suggestions.append(MediaRecommendation.from_book(doc))
                         seen_olids.add(olid)
             except Exception as e:
                 print(f"[OpenLibrary] Erreur suggestion auteur {author}: {e}")
@@ -119,12 +102,7 @@ def recommend(
                 for doc in results.get("docs", [])[:5]:
                     olid = doc.get("key", "").replace("/works/", "")
                     if olid and olid not in seen_olids:
-                        suggestions.append({
-                            "title": doc.get("title"),
-                            "id": olid,
-                            "cover": f"https://covers.openlibrary.org/b/id/{doc.get('cover_i')}-L.jpg" if doc.get('cover_i') else None,
-                            "author": doc.get("author_name", [None])[0]
-                        })
+                        suggestions.append(MediaRecommendation.from_book(doc))
                         seen_olids.add(olid)
             except Exception as e:
                 print(f"[OpenLibrary] Erreur suggestion genre {subject}: {e}")
@@ -143,14 +121,8 @@ def recommend(
                     for title in media_titles:
                         doc = search_book(title)
                         if doc and "key" in doc and doc["key"].replace("/works/", "") not in seen_olids:
-                            olid = doc["key"].replace("/works/", "")
-                            suggestions.append({
-                                "title": doc.get("title"),
-                                "id": olid,
-                                "cover": f"https://covers.openlibrary.org/b/id/{doc.get('cover_i')}-L.jpg" if doc.get('cover_i') else None,
-                                "author": doc.get("author_name", [None])[0]
-                            })
-                            seen_olids.add(olid)
+                            suggestions.append(MediaRecommendation.from_book(doc))
+                            seen_olids.add(doc["key"].replace("/works/", ""))
                         if len(suggestions) >= 10:
                             break
             except Exception as e:
@@ -174,20 +146,9 @@ def recommend(
             if not media_details:
                 continue
             if media_type == "book":
-                recommendations.append({
-                    "title": media_details.get("title"),
-                    "id": media_details.get("olid"),
-                    "cover": f"https://covers.openlibrary.org/b/id/{media_details.get('cover_i')}-L.jpg" if media_details.get('cover_i') else None,
-                    "author": media_details.get("author_name", [None])[0]
-                })
+                recommendations.append(MediaRecommendation.from_book(media_details))
             else:
-                recommendations.append({
-                    "title": media_details.get("title") or media_details.get("name"),
-                    "id": media_details.get("id"),
-                    "overview": media_details.get("overview"),
-                    "poster_path": media_details.get("poster_path"),
-                    "release_date": media_details.get("release_date") or media_details.get("first_air_date")
-                })
+                recommendations.append(MediaRecommendation.from_movie_tv(media_details, MediaType(media_type)))
         return recommendations
     except (KeyError, IndexError, ValueError) as e:
         raw_content = llm_response.get('choices', [{}])[0].get('message', {}).get('content', 'Contenu non disponible')
@@ -221,28 +182,11 @@ def recommend_by_mood(
             if not media_details:
                 continue
             if media_type == "game":
-                recommendations.append({
-                    "title": media_details.get("name"),
-                    "id": media_details.get("id"),
-                    "cover": media_details.get("background_image"),
-                    "release_date": media_details.get("released"),
-                    "platforms": [p["platform"]["name"] for p in media_details.get("platforms", [])]
-                })
+                recommendations.append(MediaRecommendation.from_game(media_details))
             elif media_type == "book":
-                recommendations.append({
-                    "title": media_details.get("title"),
-                    "id": media_details.get("olid"),
-                    "cover": f"https://covers.openlibrary.org/b/id/{media_details.get('cover_i')}-L.jpg" if media_details.get('cover_i') else None,
-                    "author": media_details.get("author_name", [None])[0]
-                })
+                recommendations.append(MediaRecommendation.from_book(media_details))
             else:
-                recommendations.append({
-                    "title": media_details.get("title") or media_details.get("name"),
-                    "id": media_details.get("id"),
-                    "overview": media_details.get("overview"),
-                    "poster_path": media_details.get("poster_path"),
-                    "release_date": media_details.get("release_date") or media_details.get("first_air_date")
-                })
+                recommendations.append(MediaRecommendation.from_movie_tv(media_details, MediaType(media_type)))
         return recommendations
     except (KeyError, IndexError, ValueError) as e:
         raw_content = llm_response.get('choices', [{}])[0].get('message', {}).get('content', 'Contenu non disponible')
