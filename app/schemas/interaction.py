@@ -14,7 +14,8 @@ class RecommendationRequest(BaseModel):
     liked_tmdb_ids: List[str]
 
 class LikeRequest(BaseModel):
-    movie_id: str
+    media_id: str
+    media_type: str  # 'movie', 'tv', etc. enum ?
 
 class MoodRecommendationRequest(BaseModel):
     mood: Mood
