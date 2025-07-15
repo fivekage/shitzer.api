@@ -3,8 +3,8 @@ from typing import List, Optional
 
 class UserInteractions(BaseModel):
     user_id: str
-    liked_ids: List[str] = []
-    disliked_ids: List[str] = []
+    liked_ids: dict = {}  # media_type -> List[str]
+    disliked_ids: dict = {}  # media_type -> List[str]
 
 class User(BaseModel):
     id: Optional[str] = None
