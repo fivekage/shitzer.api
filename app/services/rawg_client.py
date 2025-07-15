@@ -31,7 +31,9 @@ def get_top_games(year: int = None, ordering: str = "-added", page_size: int = 1
         "ordering": ordering,
         "page_size": page_size
     }
-    r = requests.get(f"{RAWG_BASE_URL}/games", params=params)
+    url = f"{RAWG_BASE_URL}/games"
+    print(f"[RAWG] get_top_games URL: {url} params: {params}")
+    r = requests.get(url, params=params)
     r.raise_for_status()
     return r.json().get("results", [])
 
@@ -40,6 +42,8 @@ def get_suggested_games(game_id: int, page_size: int = 10):
     Récupère les jeux similaires à un jeu donné via RAWG.
     """
     params = {"key": RAWG_API_KEY, "page_size": page_size}
-    r = requests.get(f"{RAWG_BASE_URL}/games/{game_id}/suggested", params=params)
+    url = f"{RAWG_BASE_URL}/games/{game_id}/suggested"
+    print(f"[RAWG] get_suggested_games URL: {url} params: {params}")
+    r = requests.get(url, params=params)
     r.raise_for_status()
     return r.json().get("results", []) 
